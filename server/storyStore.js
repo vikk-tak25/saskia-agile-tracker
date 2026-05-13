@@ -98,7 +98,7 @@ export function reorderTodoStories(stories, orderedIds) {
 
   const priorityById = new Map(orderedIds.map((id, index) => [Number(id), index + 1]));
 
-  return stories.map((story) => {
+  return sortStories(stories.map((story) => {
     if (story.status !== "todo") {
       return story;
     }
@@ -108,7 +108,7 @@ export function reorderTodoStories(stories, orderedIds) {
       priority: priorityById.get(story.id),
       updatedAt: formatDateTime()
     };
-  });
+  }));
 }
 
 export function addComment(stories, id, text) {
@@ -237,4 +237,3 @@ function formatDateTime(date = new Date()) {
     pad(date.getDate())
   ].join("-") + ` ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
-
