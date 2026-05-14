@@ -27,6 +27,9 @@ npm install
 
 # Arendusserveri käivitamine (frontend + backend korraga)
 npm run dev
+
+# REST API testide käivitamine
+npm test
 ```
 
 - Frontend: [http://localhost:5173](http://localhost:5173)
@@ -57,6 +60,7 @@ npm run dev
 - Kommentaaride kustutamine
 - Drag-and-drop story liigutamiseks kõigi veergude vahel
 - Sobivad HTTP staatusekoodid API vigade korral (400, 404, 500)
+- 11 automaattesti REST API jaoks (`npm test`)
 
 ---
 
@@ -64,7 +68,6 @@ npm run dev
 
 - Story detailvaade (eraldi leht või suurem modal)
 - Filtreerimine staatuse või punktide järgi
-- Automaattestid REST API jaoks
 
 ---
 
