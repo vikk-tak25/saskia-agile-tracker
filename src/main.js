@@ -32,7 +32,6 @@ const state = {
   commentSubmittingId: null,
   commentErrorByStoryId: {},
   draggingStoryId: null,
-  dragOverStoryId: null,
   reorderSaving: false
 };
 
@@ -148,13 +147,11 @@ function renderStoryCard(story) {
   const isCommentSubmitting = state.commentSubmittingId === story.id;
   const commentDraft = state.commentDrafts[story.id] || "";
   const commentError = state.commentErrorByStoryId[story.id] || "";
-  const isDragging = state.draggingStoryId === story.id;
-  const isDragTarget = state.dragOverStoryId === story.id;
   const isTodoStory = story.status === "todo";
 
   return `
     <article
-      class="story-card${isDragging ? " story-card-dragging" : ""}${isDragTarget ? " story-card-drag-target" : ""}"
+      class="story-card"
       data-story-id="${story.id}"
       ${isTodoStory ? `draggable="true" data-draggable-story="todo"` : ""}
     >
@@ -323,10 +320,9 @@ function handleDragStart(event) {
 
   const storyId = Number(card.dataset.storyId);
   state.draggingStoryId = storyId;
-  state.dragOverStoryId = storyId;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", String(storyId));
-  renderApp();
+  card.classList.add("story-card-dragging");
 }
 
 function handleDragOver(event) {
@@ -344,21 +340,13 @@ function handleDragOver(event) {
   event.preventDefault();
 
   if (card) {
-    const nextId = Number(card.dataset.storyId);
-    if (nextId !== state.dragOverStoryId) {
-      state.dragOverStoryId = nextId;
-      renderApp();
+    if (Number(card.dataset.storyId) !== state.draggingStoryId) {
+      setDragTarget(card);
     }
     return;
   }
 
-  const todoStories = state.stories.filter((story) => story.status === "todo");
-  const fallbackId = todoStories.at(-1)?.id ?? null;
-
-  if (fallbackId && fallbackId !== state.dragOverStoryId) {
-    state.dragOverStoryId = fallbackId;
-    renderApp();
-  }
+  clearDragTarget();
 }
 
 async function handleDrop(event) {
@@ -375,7 +363,8 @@ async function handleDrop(event) {
 
   event.preventDefault();
   const draggedId = state.draggingStoryId;
-  const targetId = card ? Number(card.dataset.storyId) : state.dragOverStoryId;
+  const targetCard = card && Number(card.dataset.storyId) !== draggedId ? card : getDragTargetCard();
+  const targetId = targetCard ? Number(targetCard.dataset.storyId) : null;
 
   if (!targetId) {
     clearDragState();
@@ -670,12 +659,34 @@ function hasOrderChanged(currentIds, nextIds) {
 }
 
 function clearDragState(shouldRender = true) {
+  document
+    .querySelector(`[data-story-id="${state.draggingStoryId}"]`)
+    ?.classList.remove("story-card-dragging");
+  clearDragTarget();
   state.draggingStoryId = null;
-  state.dragOverStoryId = null;
 
   if (shouldRender) {
     renderApp();
   }
+}
+
+function setDragTarget(card) {
+  const currentTarget = getDragTargetCard();
+
+  if (currentTarget === card) {
+    return;
+  }
+
+  currentTarget?.classList.remove("story-card-drag-target");
+  card.classList.add("story-card-drag-target");
+}
+
+function clearDragTarget() {
+  getDragTargetCard()?.classList.remove("story-card-drag-target");
+}
+
+function getDragTargetCard() {
+  return document.querySelector(".story-card-drag-target");
 }
 
 function escapeHtml(value) {
