@@ -473,16 +473,23 @@ async function handleDrop(event) {
   }
 
   const status = state.draggingStatus;
+  const columnIds = state.stories.filter((s) => s.status === status).map((s) => s.id);
   const card = event.target.closest(".card");
   const targetCard =
     card && Number(card.dataset.storyId) !== draggedId ? card : getDragTargetCard();
   const targetId = targetCard ? Number(targetCard.dataset.storyId) : null;
+
+  let next;
   if (!targetId) {
-    clearDragState();
-    return;
+    // Dropped on empty column area — move to end
+    next = [...columnIds.filter((id) => id !== draggedId), draggedId];
+  } else {
+    // Insert before or after target based on cursor position
+    const rect = targetCard.getBoundingClientRect();
+    const insertAfter = event.clientY > rect.top + rect.height / 2;
+    next = moveStoryId(columnIds, draggedId, targetId, insertAfter);
   }
-  const columnIds = state.stories.filter((s) => s.status === status).map((s) => s.id);
-  const next = moveStoryId(columnIds, draggedId, targetId);
+
   if (!hasOrderChanged(columnIds, next)) {
     clearDragState();
     return;
@@ -718,14 +725,12 @@ function getStatusLabel(status) {
   return columns.find((col) => col.key === status)?.title || status;
 }
 
-function moveStoryId(ids, draggedId, targetId) {
-  const next = [...ids];
-  const from = next.indexOf(draggedId);
-  const to = next.indexOf(targetId);
-  if (from === -1 || to === -1) return ids;
-  next.splice(from, 1);
-  next.splice(to, 0, draggedId);
-  return next;
+function moveStoryId(ids, draggedId, targetId, insertAfter = false) {
+  const filtered = ids.filter((id) => id !== draggedId);
+  const to = filtered.indexOf(targetId);
+  if (to === -1) return ids;
+  filtered.splice(insertAfter ? to + 1 : to, 0, draggedId);
+  return filtered;
 }
 
 function hasOrderChanged(curr, next) {
