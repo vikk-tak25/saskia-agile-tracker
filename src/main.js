@@ -27,7 +27,10 @@ const state = {
   formValues: { ...emptyForm },
   formError: "",
   submitting: false,
-  statusUpdatingId: null
+  statusUpdatingId: null,
+  commentDrafts: {},
+  commentSubmittingId: null,
+  commentErrorByStoryId: {}
 };
 
 renderApp();
@@ -137,6 +140,9 @@ function renderStoryCard(story) {
   const acceptanceCount = story.acceptanceCriteria.length;
   const commentsCount = story.comments.length;
   const isStatusUpdating = state.statusUpdatingId === story.id;
+  const isCommentSubmitting = state.commentSubmittingId === story.id;
+  const commentDraft = state.commentDrafts[story.id] || "";
+  const commentError = state.commentErrorByStoryId[story.id] || "";
 
   return `
     <article class="story-card" data-story-id="${story.id}">
@@ -166,10 +172,40 @@ function renderStoryCard(story) {
           ${renderStatusOptions(story.status)}
         </select>
       </label>
+      <section class="comments-panel">
+        <div class="comments-header">
+          <h4>Comments</h4>
+          <span>${commentsCount}</span>
+        </div>
+        <div class="comment-list">
+          ${commentsCount > 0 ? story.comments.map(renderComment).join("") : '<p class="comment-empty">No comments yet.</p>'}
+        </div>
+        <form class="comment-form" data-story-id="${story.id}">
+          <textarea
+            name="text"
+            rows="3"
+            placeholder="Add a comment"
+            ${isCommentSubmitting ? "disabled" : ""}
+          >${escapeHtml(commentDraft)}</textarea>
+          ${commentError ? `<p class="comment-error">${escapeHtml(commentError)}</p>` : ""}
+          <button class="secondary-button comment-submit" type="submit" ${isCommentSubmitting ? "disabled" : ""}>
+            ${isCommentSubmitting ? "Saving..." : "Add comment"}
+          </button>
+        </form>
+      </section>
       <div class="story-actions">
         <button class="secondary-button story-action" type="button" data-action="edit" data-story-id="${story.id}">Edit</button>
         <button class="danger-button story-action" type="button" data-action="delete" data-story-id="${story.id}">Delete</button>
       </div>
+    </article>
+  `;
+}
+
+function renderComment(comment) {
+  return `
+    <article class="comment-item">
+      <p>${escapeHtml(comment.text)}</p>
+      <time>${escapeHtml(comment.createdAt)}</time>
     </article>
   `;
 }
@@ -262,63 +298,105 @@ function handleChange(event) {
 }
 
 async function handleSubmit(event) {
-  if (event.target.id !== "story-form") {
+  if (event.target.id === "story-form") {
+    event.preventDefault();
+
+    const formData = new FormData(event.target);
+    const payload = {
+      title: String(formData.get("title") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      status: String(formData.get("status") || "todo"),
+      points: String(formData.get("points") || "").trim(),
+      acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    };
+
+    state.formValues = {
+      title: payload.title,
+      description: payload.description,
+      status: payload.status,
+      points: payload.points,
+      acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
+    };
+    state.formError = "";
+    state.submitting = true;
+    renderApp();
+
+    try {
+      const isEdit = state.formMode === "edit";
+      const endpoint = isEdit ? `${API_BASE}/stories/${state.editingId}` : `${API_BASE}/stories`;
+      const method = isEdit ? "PUT" : "POST";
+
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const body = response.status === 204 ? null : await response.json();
+
+      if (!response.ok) {
+        throw new Error(body?.error || "Story could not be saved.");
+      }
+
+      state.boardMessage = isEdit ? "Story updated." : "Story created.";
+      state.boardError = false;
+      resetForm(false);
+      await loadStories();
+    } catch (error) {
+      state.formError = error.message;
+      renderApp();
+    } finally {
+      state.submitting = false;
+      renderApp();
+    }
+
     return;
   }
 
-  event.preventDefault();
+  if (event.target.classList.contains("comment-form")) {
+    event.preventDefault();
+    const storyId = Number(event.target.dataset.storyId);
+    const formData = new FormData(event.target);
+    const text = String(formData.get("text") || "");
+    await addComment(storyId, text);
+  }
+}
 
-  const formData = new FormData(event.target);
-  const payload = {
-    title: String(formData.get("title") || "").trim(),
-    description: String(formData.get("description") || "").trim(),
-    status: String(formData.get("status") || "todo"),
-    points: String(formData.get("points") || "").trim(),
-    acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean)
-  };
-
-  state.formValues = {
-    title: payload.title,
-    description: payload.description,
-    status: payload.status,
-    points: payload.points,
-    acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
-  };
-  state.formError = "";
-  state.submitting = true;
+async function addComment(storyId, text) {
+  state.commentDrafts[storyId] = text;
+  state.commentErrorByStoryId[storyId] = "";
+  state.commentSubmittingId = storyId;
   renderApp();
 
   try {
-    const isEdit = state.formMode === "edit";
-    const endpoint = isEdit ? `${API_BASE}/stories/${state.editingId}` : `${API_BASE}/stories`;
-    const method = isEdit ? "PUT" : "POST";
-
-    const response = await fetch(endpoint, {
-      method,
+    const response = await fetch(`${API_BASE}/stories/${storyId}/comments`, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ text })
     });
 
-    const body = response.status === 204 ? null : await response.json();
+    const body = await response.json();
 
     if (!response.ok) {
-      throw new Error(body?.error || "Story could not be saved.");
+      throw new Error(body?.error || "Comment could not be saved.");
     }
 
-    state.boardMessage = isEdit ? "Story updated." : "Story created.";
-    state.boardError = false;
-    resetForm(false);
+    state.commentDrafts[storyId] = "";
+    state.commentErrorByStoryId[storyId] = "";
+    state.boardMessage = `Comment added to story #${storyId}.`;
     await loadStories();
   } catch (error) {
-    state.formError = error.message;
+    state.commentErrorByStoryId[storyId] = error.message;
     renderApp();
   } finally {
-    state.submitting = false;
+    state.commentSubmittingId = null;
     renderApp();
   }
 }
