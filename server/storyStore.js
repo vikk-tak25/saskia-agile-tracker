@@ -130,6 +130,26 @@ export function addComment(stories, id, text) {
   };
 }
 
+export function deleteComment(stories, storyId, commentId) {
+  const existing = findStory(stories, storyId);
+
+  if (!existing) {
+    return null;
+  }
+
+  const comment = existing.comments.find((c) => c.id === Number(commentId));
+
+  if (!comment) {
+    throw validationError("Comment not found.");
+  }
+
+  return {
+    ...existing,
+    comments: existing.comments.filter((c) => c.id !== Number(commentId)),
+    updatedAt: formatDateTime()
+  };
+}
+
 export function replaceStory(stories, updatedStory) {
   return normalizePriorities(
     stories.map((story) => (story.id === updatedStory.id ? updatedStory : story))

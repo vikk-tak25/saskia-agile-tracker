@@ -3,6 +3,7 @@ import cors from "cors";
 import {
   addComment,
   createStory,
+  deleteComment,
   findStory,
   readStories,
   reorderStoriesByStatus,
@@ -138,6 +139,23 @@ app.post("/api/stories/:id/comments", async (req, res, next) => {
     const updatedStories = replaceStory(stories, story);
     await saveStories(updatedStories);
     res.status(201).json(findStory(updatedStories, req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/stories/:id/comments/:commentId", async (req, res, next) => {
+  try {
+    const stories = await readStories();
+    const story = deleteComment(stories, req.params.id, req.params.commentId);
+
+    if (!story) {
+      return res.status(404).json({ error: "Story not found." });
+    }
+
+    const updatedStories = replaceStory(stories, story);
+    await saveStories(updatedStories);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
