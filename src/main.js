@@ -422,22 +422,37 @@ function handleDragStart(event) {
 function handleDragOver(event) {
   if (!state.draggingStoryId) return;
   const dropzone = event.target.closest("[data-dropzone]");
-  if (!dropzone || dropzone.dataset.dropzone !== state.draggingStatus) return;
+  if (!dropzone) return;
   event.preventDefault();
+
+  const isSameColumn = dropzone.dataset.dropzone === state.draggingStatus;
   const card = event.target.closest(".card");
-  if (card && Number(card.dataset.storyId) !== state.draggingStoryId) {
-    setDragTarget(card);
-    return;
+  const isOtherCard = card && Number(card.dataset.storyId) !== state.draggingStoryId;
+
+  if (isSameColumn) {
+    clearColumnTarget();
+    if (isOtherCard) setDragTarget(card);
+    else clearDragTarget();
+  } else {
+    clearDragTarget();
+    setColumnTarget(dropzone);
   }
-  if (!card) clearDragTarget();
 }
 
 async function handleDrop(event) {
   if (!state.draggingStoryId) return;
   const dropzone = event.target.closest("[data-dropzone]");
-  if (!dropzone || dropzone.dataset.dropzone !== state.draggingStatus) return;
+  if (!dropzone) return;
   event.preventDefault();
   const draggedId = state.draggingStoryId;
+  const dropzoneStatus = dropzone.dataset.dropzone;
+  const isSameColumn = dropzoneStatus === state.draggingStatus;
+
+  if (!isSameColumn) {
+    await moveToColumn(draggedId, dropzoneStatus);
+    return;
+  }
+
   const status = state.draggingStatus;
   const card = event.target.closest(".card");
   const targetCard =
@@ -606,6 +621,28 @@ async function updateStatus(storyId, nextStatus) {
   }
 }
 
+async function moveToColumn(storyId, newStatus) {
+  state.boardMessage = `Moving story...`;
+  state.boardError = false;
+  clearDragState(false);
+  renderApp();
+  try {
+    const res = await fetch(`${API_BASE}/stories/${storyId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "Story could not be moved.");
+    state.boardMessage = `Story moved to ${getStatusLabel(newStatus)}.`;
+    await loadStories();
+  } catch (err) {
+    state.boardMessage = err.message;
+    state.boardError = true;
+    renderApp();
+  }
+}
+
 async function saveReorder(storyIds, status = "todo") {
   state.reorderSaving = true;
   state.boardMessage = "Saving order...";
@@ -664,9 +701,21 @@ function clearDragState(shouldRender = true) {
     .querySelector(`.card[data-story-id="${state.draggingStoryId}"]`)
     ?.classList.remove("card-dragging");
   clearDragTarget();
+  clearColumnTarget();
   state.draggingStoryId = null;
   state.draggingStatus = null;
   if (shouldRender) renderApp();
+}
+
+function setColumnTarget(dropzone) {
+  const current = document.querySelector(".column-body-drag-over");
+  if (current === dropzone) return;
+  current?.classList.remove("column-body-drag-over");
+  dropzone.classList.add("column-body-drag-over");
+}
+
+function clearColumnTarget() {
+  document.querySelector(".column-body-drag-over")?.classList.remove("column-body-drag-over");
 }
 
 function setDragTarget(card) {
