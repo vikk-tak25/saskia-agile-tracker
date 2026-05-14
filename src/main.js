@@ -153,12 +153,27 @@ function renderStoryCard(story) {
     <article
       class="story-card"
       data-story-id="${story.id}"
-      ${isTodoStory ? `draggable="true" data-draggable-story="todo"` : ""}
     >
       <div class="story-card-top">
         <span class="story-id">#${story.id}</span>
         <span class="story-points">${story.points} pts</span>
       </div>
+      ${
+        isTodoStory
+          ? `
+            <button
+              class="drag-handle"
+              type="button"
+              draggable="true"
+              data-draggable-story="todo"
+              data-story-id="${story.id}"
+              aria-label="Drag to reorder backlog story"
+            >
+              Drag to reorder
+            </button>
+          `
+          : ""
+      }
       <h3>${escapeHtml(story.title)}</h3>
       <p class="story-description">${escapeHtml(story.description || "No description added.")}</p>
       <dl class="story-meta">
@@ -322,7 +337,9 @@ function handleDragStart(event) {
   state.draggingStoryId = storyId;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", String(storyId));
-  card.classList.add("story-card-dragging");
+  document
+    .querySelector(`.story-card[data-story-id="${storyId}"]`)
+    ?.classList.add("story-card-dragging");
 }
 
 function handleDragOver(event) {

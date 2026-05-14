@@ -289,10 +289,6 @@ button {
   box-shadow: 0 10px 26px rgba(19, 34, 56, 0.08);
 }
 
-.story-card[draggable="true"] {
-  cursor: grab;
-}
-
 .story-card-dragging {
   opacity: 0.5;
   transform: rotate(1deg);
@@ -309,6 +305,24 @@ button {
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
+}
+
+.drag-handle {
+  width: 100%;
+  margin-bottom: 12px;
+  border: 1px dashed rgba(19, 34, 56, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(19, 34, 56, 0.04);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .story-id,
