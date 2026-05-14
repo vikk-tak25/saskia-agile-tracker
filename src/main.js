@@ -281,6 +281,10 @@ function renderCard(story) {
             </div>`
           : ""
       }
+      <div class="card-meta">
+        <span>Created ${escapeHtml(story.createdAt)}</span>
+        ${story.updatedAt !== story.createdAt ? `<span>Updated ${escapeHtml(story.updatedAt)}</span>` : ""}
+      </div>
       <div class="card-actions">
         <button class="btn btn-sm btn-ghost" type="button" data-action="edit" data-story-id="${story.id}">Edit</button>
         <button class="btn btn-sm btn-danger" type="button" data-action="delete" data-story-id="${story.id}">Delete</button>

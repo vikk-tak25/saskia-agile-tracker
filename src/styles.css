@@ -393,6 +393,16 @@ p, h2, h3, h4 { margin: 0; }
 
 .status-select:focus { border-color: #93c5fd; }
 
+/* Card meta dates */
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
 /* Card actions */
 .card-actions {
   display: flex;
