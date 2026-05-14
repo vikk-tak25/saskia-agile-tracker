@@ -20,7 +20,7 @@ const emptyForm = {
 const state = {
   stories: [],
   loading: true,
-  boardMessage: "Loading stories...",
+  boardMessage: "",
   boardError: false,
   formMode: "create",
   editingId: null,
@@ -31,8 +31,12 @@ const state = {
   commentDrafts: {},
   commentSubmittingId: null,
   commentErrorByStoryId: {},
+  expandedComments: {},
   draggingStoryId: null,
-  reorderSaving: false
+  draggingStatus: null,
+  reorderSaving: false,
+  modalOpen: false,
+  searchQuery: ""
 };
 
 renderApp();
@@ -40,213 +44,260 @@ bindEvents();
 loadStories();
 
 function renderApp() {
+  document.body.style.overflow = state.modalOpen ? "hidden" : "";
   app.innerHTML = `
-    <main class="app-shell">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">TAK25 Agile Tracker</p>
-          <h1>Story board</h1>
-          <p class="app-subtitle">Create, update and delete project stories directly from the Kanban board.</p>
-        </div>
-        <div class="header-actions">
-          <button class="secondary-button" type="button" id="reset-form">New story</button>
-          <button class="refresh-button" type="button" id="refresh-board">Refresh</button>
-        </div>
-      </header>
-
-      <section class="workspace">
-        <aside class="editor-panel">
-          <div class="panel-card">
-            <div class="panel-heading">
-              <p class="panel-label">${state.formMode === "create" ? "Create" : "Edit"}</p>
-              <h2>${state.formMode === "create" ? "Add a story" : `Edit story #${state.editingId}`}</h2>
-            </div>
-            <form id="story-form" class="story-form">
-              <label>
-                <span>Title</span>
-                <input type="text" name="title" value="${escapeAttribute(state.formValues.title)}" required />
-              </label>
-              <label>
-                <span>Description</span>
-                <textarea name="description" rows="4">${escapeHtml(state.formValues.description)}</textarea>
-              </label>
-              <div class="form-row">
-                <label>
-                  <span>Status</span>
-                  <select name="status">
-                    ${renderStatusOptions(state.formValues.status)}
-                  </select>
-                </label>
-                <label>
-                  <span>Points</span>
-                  <input type="number" min="0" step="1" name="points" value="${escapeAttribute(state.formValues.points)}" required />
-                </label>
-              </div>
-              <label>
-                <span>Acceptance criteria</span>
-                <textarea name="acceptanceCriteria" rows="6" placeholder="One criterion per line" required>${escapeHtml(state.formValues.acceptanceCriteria)}</textarea>
-              </label>
-              ${state.formError ? `<p class="form-error">${escapeHtml(state.formError)}</p>` : ""}
-              <div class="form-actions">
-                <button class="primary-button" type="submit" ${state.submitting ? "disabled" : ""}>
-                  ${state.submitting ? "Saving..." : state.formMode === "create" ? "Create story" : "Save changes"}
-                </button>
-                ${
-                  state.formMode === "edit"
-                    ? '<button class="secondary-button" type="button" id="cancel-edit">Cancel</button>'
-                    : ""
-                }
-              </div>
-            </form>
+    <div class="app-root">
+      <nav class="navbar">
+        <div class="navbar-brand">Agile Tracker</div>
+        <div class="navbar-mid">
+          <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="none">
+              <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M13 13l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input
+              id="search-input"
+              type="search"
+              class="search-input"
+              placeholder="Search stories..."
+              value="${escapeAttribute(state.searchQuery)}"
+              autocomplete="off"
+            />
           </div>
-        </aside>
+        </div>
+        <button class="btn btn-primary" id="new-story-btn" type="button">+ New story</button>
+      </nav>
 
-        <section class="board-panel">
-          <section class="board-status${state.boardError ? " board-status-error" : ""}" id="board-status" aria-live="polite">
+      <main class="board-wrap">
+        ${state.boardMessage ? `
+          <div class="status-bar${state.boardError ? " status-bar-error" : ""}" role="status">
             ${escapeHtml(state.boardMessage)}
-          </section>
-          <section class="board-grid" aria-label="Kanban board">
-            ${renderBoard()}
-          </section>
-        </section>
-      </section>
-    </main>
+          </div>
+        ` : ""}
+        <div class="board" aria-label="Kanban board">
+          ${renderBoard()}
+        </div>
+      </main>
+
+      ${state.modalOpen ? renderModal() : ""}
+    </div>
+  `;
+}
+
+function renderModal() {
+  return `
+    <div class="modal-backdrop" id="modal-backdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-header">
+          <h2 class="modal-title">
+            ${state.formMode === "create" ? "New story" : `Edit story #${state.editingId}`}
+          </h2>
+          <button class="modal-close-btn" id="modal-close" type="button" aria-label="Close">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+          <form id="story-form" class="form">
+            <div class="form-group">
+              <label class="form-label" for="f-title">Title</label>
+              <input
+                id="f-title"
+                type="text"
+                name="title"
+                class="form-input"
+                value="${escapeAttribute(state.formValues.title)}"
+                placeholder="As a user, I want to..."
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="f-desc">Description</label>
+              <textarea
+                id="f-desc"
+                name="description"
+                class="form-input"
+                rows="3"
+                placeholder="Describe the story..."
+              >${escapeHtml(state.formValues.description)}</textarea>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="f-status">Status</label>
+                <select id="f-status" name="status" class="form-input">
+                  ${renderStatusOptions(state.formValues.status)}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="f-pts">Points</label>
+                <input
+                  id="f-pts"
+                  type="number"
+                  min="0"
+                  step="1"
+                  name="points"
+                  class="form-input"
+                  value="${escapeAttribute(state.formValues.points)}"
+                  placeholder="0"
+                  required
+                />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="f-ac">Acceptance criteria</label>
+              <textarea
+                id="f-ac"
+                name="acceptanceCriteria"
+                class="form-input"
+                rows="5"
+                placeholder="One criterion per line"
+                required
+              >${escapeHtml(state.formValues.acceptanceCriteria)}</textarea>
+              <p class="form-hint">Enter each criterion on a new line.</p>
+            </div>
+            ${state.formError ? `<p class="form-error">${escapeHtml(state.formError)}</p>` : ""}
+            <div class="modal-footer">
+              <button class="btn btn-ghost" type="button" id="cancel-edit">Cancel</button>
+              <button class="btn btn-primary" type="submit" ${state.submitting ? "disabled" : ""}>
+                ${state.submitting ? "Saving..." : state.formMode === "create" ? "Create story" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   `;
 }
 
 function renderBoard() {
   return columns
-    .map((column) => {
-      const items = state.stories.filter((story) => story.status === column.key);
-      const pointsTotal = items.reduce((total, story) => total + story.points, 0);
-      const isTodoColumn = column.key === "todo";
+    .map((col) => {
+      const allItems = state.stories.filter((s) => s.status === col.key);
+      const items = state.searchQuery
+        ? allItems.filter((s) =>
+            s.title.toLowerCase().includes(state.searchQuery.toLowerCase())
+          )
+        : allItems;
+      const total = allItems.reduce((t, s) => t + s.points, 0);
+      const isTodo = col.key === "todo";
 
       return `
-        <section class="board-column board-column-${column.tone}" data-column-key="${column.key}">
-          <header class="column-header">
-            <div>
-              <h2>${column.title}</h2>
-              <p>${items.length} stories</p>
+        <div class="column column-${col.tone}" data-column-key="${col.key}">
+          <div class="column-header">
+            <h2 class="column-title">${col.title}</h2>
+            <div class="column-meta">
+              <span class="col-chip">${allItems.length} ${allItems.length === 1 ? "story" : "stories"}</span>
+              <span class="col-chip col-chip-pts">${total}p</span>
             </div>
-            <span class="column-total">${pointsTotal} pts</span>
-          </header>
-          ${isTodoColumn ? `<p class="column-hint">Drag stories to reorder the backlog.</p>` : ""}
-          <div class="column-cards${isTodoColumn ? " todo-dropzone" : ""}" ${isTodoColumn ? 'data-dropzone="todo"' : ""}>
-            ${items.length > 0 ? items.map(renderStoryCard).join("") : renderEmptyState(column.title)}
           </div>
-        </section>
+          <div class="column-body todo-dropzone" data-dropzone="${col.key}">
+            ${items.length > 0 ? items.map(renderCard).join("") : renderEmpty()}
+          </div>
+        </div>
       `;
     })
     .join("");
 }
 
-function renderStoryCard(story) {
-  const acceptanceCount = story.acceptanceCriteria.length;
-  const commentsCount = story.comments.length;
-  const isStatusUpdating = state.statusUpdatingId === story.id;
-  const isCommentSubmitting = state.commentSubmittingId === story.id;
-  const commentDraft = state.commentDrafts[story.id] || "";
-  const commentError = state.commentErrorByStoryId[story.id] || "";
-  const isTodoStory = story.status === "todo";
+function renderCard(story) {
+  const acCount = story.acceptanceCriteria.length;
+  const cmtCount = story.comments.length;
+  const isUpdating = state.statusUpdatingId === story.id;
+  const isSubmittingCmt = state.commentSubmittingId === story.id;
+  const draft = state.commentDrafts[story.id] || "";
+  const cmtError = state.commentErrorByStoryId[story.id] || "";
+  const isTodo = story.status === "todo";
+  const isExpanded = !!state.expandedComments[story.id];
 
   return `
-    <article
-      class="story-card"
-      data-story-id="${story.id}"
-    >
-      <div class="story-card-top">
-        <span class="story-id">#${story.id}</span>
-        <span class="story-points">${story.points} pts</span>
+    <div class="card" data-story-id="${story.id}">
+      <div class="card-top">
+        <button
+          class="drag-handle"
+          type="button"
+          draggable="true"
+          data-draggable-story="${story.status}"
+          data-story-id="${story.id}"
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+        ><svg viewBox="0 0 10 16" width="7" height="12" fill="currentColor" aria-hidden="true">
+          <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
+          <circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/>
+          <circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+        </svg></button>
+        <div class="card-top-right">
+          <span class="card-pts">${story.points}p</span>
+          <span class="card-id">#${story.id}</span>
+        </div>
       </div>
+      <h3 class="card-title">${escapeHtml(story.title)}</h3>
+      ${story.description ? `<p class="card-desc">${escapeHtml(story.description)}</p>` : ""}
+      <div class="card-tags">
+        <span class="tag">${acCount} AC</span>
+        <button
+          class="tag tag-btn"
+          type="button"
+          data-action="toggle-comments"
+          data-story-id="${story.id}"
+        >${cmtCount} comment${cmtCount !== 1 ? "s" : ""}${isExpanded ? " &#9652;" : " &#9662;"}</button>
+      </div>
+      <select
+        class="status-select"
+        data-action="status-change"
+        data-story-id="${story.id}"
+        ${isUpdating ? "disabled" : ""}
+        aria-label="Change status"
+      >
+        ${renderStatusOptions(story.status)}
+      </select>
       ${
-        isTodoStory
-          ? `
-            <button
-              class="drag-handle"
-              type="button"
-              draggable="true"
-              data-draggable-story="todo"
-              data-story-id="${story.id}"
-              aria-label="Drag to reorder backlog story"
-            >
-              Drag to reorder
-            </button>
-          `
+        isExpanded
+          ? `<div class="comments-box">
+              <div class="comment-list">
+                ${
+                  cmtCount > 0
+                    ? story.comments
+                        .map(
+                          (c) => `
+                        <div class="comment">
+                          <p class="comment-text">${escapeHtml(c.text)}</p>
+                          <time class="comment-time">${escapeHtml(c.createdAt)}</time>
+                        </div>`
+                        )
+                        .join("")
+                    : `<p class="comment-empty">No comments yet.</p>`
+                }
+              </div>
+              <form class="cmt-form" data-story-id="${story.id}">
+                <textarea
+                  name="text"
+                  class="form-input"
+                  rows="2"
+                  placeholder="Add a comment..."
+                  ${isSubmittingCmt ? "disabled" : ""}
+                >${escapeHtml(draft)}</textarea>
+                ${cmtError ? `<p class="form-error-sm">${escapeHtml(cmtError)}</p>` : ""}
+                <button class="btn btn-sm btn-secondary" type="submit" ${isSubmittingCmt ? "disabled" : ""}>
+                  ${isSubmittingCmt ? "Saving..." : "Add comment"}
+                </button>
+              </form>
+            </div>`
           : ""
       }
-      <h3>${escapeHtml(story.title)}</h3>
-      <p class="story-description">${escapeHtml(story.description || "No description added.")}</p>
-      <dl class="story-meta">
-        <div>
-          <dt>Criteria</dt>
-          <dd>${acceptanceCount}</dd>
-        </div>
-        <div>
-          <dt>Comments</dt>
-          <dd>${commentsCount}</dd>
-        </div>
-        <div>
-          <dt>Priority</dt>
-          <dd>${story.priority ?? "-"}</dd>
-        </div>
-      </dl>
-      <label class="status-control">
-        <span>Status</span>
-        <select data-action="status-change" data-story-id="${story.id}" ${isStatusUpdating ? "disabled" : ""}>
-          ${renderStatusOptions(story.status)}
-        </select>
-      </label>
-      <section class="comments-panel">
-        <div class="comments-header">
-          <h4>Comments</h4>
-          <span>${commentsCount}</span>
-        </div>
-        <div class="comment-list">
-          ${commentsCount > 0 ? story.comments.map(renderComment).join("") : '<p class="comment-empty">No comments yet.</p>'}
-        </div>
-        <form class="comment-form" data-story-id="${story.id}">
-          <textarea
-            name="text"
-            rows="3"
-            placeholder="Add a comment"
-            ${isCommentSubmitting ? "disabled" : ""}
-          >${escapeHtml(commentDraft)}</textarea>
-          ${commentError ? `<p class="comment-error">${escapeHtml(commentError)}</p>` : ""}
-          <button class="secondary-button comment-submit" type="submit" ${isCommentSubmitting ? "disabled" : ""}>
-            ${isCommentSubmitting ? "Saving..." : "Add comment"}
-          </button>
-        </form>
-      </section>
-      <div class="story-actions">
-        <button class="secondary-button story-action" type="button" data-action="edit" data-story-id="${story.id}">Edit</button>
-        <button class="danger-button story-action" type="button" data-action="delete" data-story-id="${story.id}">Delete</button>
+      <div class="card-actions">
+        <button class="btn btn-sm btn-ghost" type="button" data-action="edit" data-story-id="${story.id}">Edit</button>
+        <button class="btn btn-sm btn-danger" type="button" data-action="delete" data-story-id="${story.id}">Delete</button>
       </div>
-    </article>
-  `;
-}
-
-function renderComment(comment) {
-  return `
-    <article class="comment-item">
-      <p>${escapeHtml(comment.text)}</p>
-      <time>${escapeHtml(comment.createdAt)}</time>
-    </article>
-  `;
-}
-
-function renderEmptyState(title) {
-  return `
-    <div class="empty-state">
-      <p>No stories in ${title}.</p>
     </div>
   `;
 }
 
-function renderStatusOptions(selectedStatus) {
+function renderEmpty() {
+  return `<div class="empty-state"><p>No stories here.</p></div>`;
+}
+
+function renderStatusOptions(selected) {
   return columns
     .map(
-      (column) =>
-        `<option value="${column.key}" ${selectedStatus === column.key ? "selected" : ""}>${column.title}</option>`
+      (col) =>
+        `<option value="${col.key}" ${selected === col.key ? "selected" : ""}>${col.title}</option>`
     )
     .join("");
 }
@@ -255,29 +306,41 @@ function bindEvents() {
   app.addEventListener("click", handleClick);
   app.addEventListener("submit", handleSubmit);
   app.addEventListener("change", handleChange);
+  app.addEventListener("input", handleInput);
   app.addEventListener("dragstart", handleDragStart);
   app.addEventListener("dragover", handleDragOver);
   app.addEventListener("drop", handleDrop);
   app.addEventListener("dragend", handleDragEnd);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.modalOpen) closeModal();
+  });
+}
+
+function openModal() {
+  state.modalOpen = true;
+  renderApp();
+  document.getElementById("f-title")?.focus();
+}
+
+function closeModal() {
+  resetForm(false);
+  state.modalOpen = false;
+  renderApp();
 }
 
 async function loadStories() {
   state.loading = true;
-  state.boardMessage = "Loading stories...";
+  state.boardMessage = "Loading...";
   state.boardError = false;
   renderApp();
 
   try {
-    const response = await fetch(`${API_BASE}/stories`);
-
-    if (!response.ok) {
-      throw new Error("Stories could not be loaded.");
-    }
-
-    state.stories = await response.json();
-    state.boardMessage = `${state.stories.length} stories loaded from the API.`;
-  } catch (error) {
-    state.boardMessage = error.message;
+    const res = await fetch(`${API_BASE}/stories`);
+    if (!res.ok) throw new Error("Stories could not be loaded.");
+    state.stories = await res.json();
+    state.boardMessage = "";
+  } catch (err) {
+    state.boardMessage = err.message;
     state.boardError = true;
   } finally {
     state.loading = false;
@@ -285,150 +348,137 @@ async function loadStories() {
   }
 }
 
+function handleInput(event) {
+  if (event.target.id !== "search-input") return;
+  state.searchQuery = event.target.value;
+  const board = document.querySelector(".board");
+  if (board) board.innerHTML = renderBoard();
+}
+
 function handleClick(event) {
-  const button = event.target.closest("button");
-
-  if (!button) {
+  if (event.target.id === "modal-backdrop") {
+    closeModal();
     return;
   }
 
-  if (button.id === "refresh-board") {
-    loadStories();
+  const btn = event.target.closest("button");
+  if (!btn) return;
+
+  if (btn.id === "new-story-btn") {
+    state.formMode = "create";
+    state.formValues = { ...emptyForm };
+    state.formError = "";
+    openModal();
     return;
   }
 
-  if (button.id === "reset-form" || button.id === "cancel-edit") {
-    resetForm();
+  if (btn.id === "modal-close" || btn.id === "cancel-edit") {
+    closeModal();
     return;
   }
 
-  const storyId = Number(button.dataset.storyId);
+  const storyId = Number(btn.dataset.storyId);
 
-  if (button.dataset.action === "edit") {
+  if (btn.dataset.action === "toggle-comments") {
+    state.expandedComments[storyId] = !state.expandedComments[storyId];
+    renderApp();
+    return;
+  }
+
+  if (btn.dataset.action === "edit") {
     startEdit(storyId);
+    return;
   }
 
-  if (button.dataset.action === "delete") {
+  if (btn.dataset.action === "delete") {
     deleteStory(storyId);
   }
 }
 
 function handleChange(event) {
-  const element = event.target;
-
-  if (element.dataset.action !== "status-change") {
-    return;
-  }
-
-  const storyId = Number(element.dataset.storyId);
-  const nextStatus = element.value;
-  updateStatus(storyId, nextStatus);
+  const el = event.target;
+  if (el.dataset.action !== "status-change") return;
+  updateStatus(Number(el.dataset.storyId), el.value);
 }
 
 function handleDragStart(event) {
-  const card = event.target.closest("[data-draggable-story='todo']");
-
-  if (!card || state.reorderSaving) {
+  const handle = event.target.closest("[data-draggable-story]");
+  if (!handle || state.reorderSaving) {
     event.preventDefault();
     return;
   }
-
-  const storyId = Number(card.dataset.storyId);
+  const storyId = Number(handle.dataset.storyId);
+  const story = state.stories.find((s) => s.id === storyId);
   state.draggingStoryId = storyId;
+  state.draggingStatus = story?.status ?? null;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", String(storyId));
-  document
-    .querySelector(`.story-card[data-story-id="${storyId}"]`)
-    ?.classList.add("story-card-dragging");
+  setTimeout(() => {
+    document.querySelector(`.card[data-story-id="${storyId}"]`)?.classList.add("card-dragging");
+  }, 0);
 }
 
 function handleDragOver(event) {
-  if (!state.draggingStoryId) {
-    return;
-  }
-
-  const card = event.target.closest("[data-draggable-story='todo']");
-  const dropzone = event.target.closest("[data-dropzone='todo']");
-
-  if (!card && !dropzone) {
-    return;
-  }
-
+  if (!state.draggingStoryId) return;
+  const dropzone = event.target.closest("[data-dropzone]");
+  if (!dropzone || dropzone.dataset.dropzone !== state.draggingStatus) return;
   event.preventDefault();
-
-  if (card) {
-    if (Number(card.dataset.storyId) !== state.draggingStoryId) {
-      setDragTarget(card);
-    }
+  const card = event.target.closest(".card");
+  if (card && Number(card.dataset.storyId) !== state.draggingStoryId) {
+    setDragTarget(card);
     return;
   }
-
-  clearDragTarget();
+  if (!card) clearDragTarget();
 }
 
 async function handleDrop(event) {
-  if (!state.draggingStoryId) {
-    return;
-  }
-
-  const card = event.target.closest("[data-draggable-story='todo']");
-  const dropzone = event.target.closest("[data-dropzone='todo']");
-
-  if (!card && !dropzone) {
-    return;
-  }
-
+  if (!state.draggingStoryId) return;
+  const dropzone = event.target.closest("[data-dropzone]");
+  if (!dropzone || dropzone.dataset.dropzone !== state.draggingStatus) return;
   event.preventDefault();
   const draggedId = state.draggingStoryId;
-  const targetCard = card && Number(card.dataset.storyId) !== draggedId ? card : getDragTargetCard();
+  const status = state.draggingStatus;
+  const card = event.target.closest(".card");
+  const targetCard =
+    card && Number(card.dataset.storyId) !== draggedId ? card : getDragTargetCard();
   const targetId = targetCard ? Number(targetCard.dataset.storyId) : null;
-
   if (!targetId) {
     clearDragState();
     return;
   }
-
-  const todoIds = state.stories
-    .filter((story) => story.status === "todo")
-    .map((story) => story.id);
-  const nextOrder = moveStoryId(todoIds, draggedId, targetId);
-
-  if (!hasOrderChanged(todoIds, nextOrder)) {
+  const columnIds = state.stories.filter((s) => s.status === status).map((s) => s.id);
+  const next = moveStoryId(columnIds, draggedId, targetId);
+  if (!hasOrderChanged(columnIds, next)) {
     clearDragState();
     return;
   }
-
-  await saveReorder(nextOrder);
+  await saveReorder(next, status);
 }
 
 function handleDragEnd() {
-  if (state.draggingStoryId) {
-    clearDragState();
-  }
+  if (state.draggingStoryId) clearDragState();
 }
 
 async function handleSubmit(event) {
   if (event.target.id === "story-form") {
     event.preventDefault();
-
-    const formData = new FormData(event.target);
+    const fd = new FormData(event.target);
     const payload = {
-      title: String(formData.get("title") || "").trim(),
-      description: String(formData.get("description") || "").trim(),
-      status: String(formData.get("status") || "todo"),
-      points: String(formData.get("points") || "").trim(),
-      acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
+      title: String(fd.get("title") || "").trim(),
+      description: String(fd.get("description") || "").trim(),
+      status: String(fd.get("status") || "todo"),
+      points: String(fd.get("points") || "").trim(),
+      acceptanceCriteria: String(fd.get("acceptanceCriteria") || "")
         .split("\n")
-        .map((item) => item.trim())
+        .map((l) => l.trim())
         .filter(Boolean)
     };
-
     state.formValues = {
       title: payload.title,
       description: payload.description,
       status: payload.status,
       points: payload.points,
-      acceptanceCriteria: String(formData.get("acceptanceCriteria") || "")
+      acceptanceCriteria: String(fd.get("acceptanceCriteria") || "")
     };
     state.formError = "";
     state.submitting = true;
@@ -436,44 +486,34 @@ async function handleSubmit(event) {
 
     try {
       const isEdit = state.formMode === "edit";
-      const endpoint = isEdit ? `${API_BASE}/stories/${state.editingId}` : `${API_BASE}/stories`;
-      const method = isEdit ? "PUT" : "POST";
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json"
-        },
+      const url = isEdit
+        ? `${API_BASE}/stories/${state.editingId}`
+        : `${API_BASE}/stories`;
+      const res = await fetch(url, {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
-      const body = response.status === 204 ? null : await response.json();
-
-      if (!response.ok) {
-        throw new Error(body?.error || "Story could not be saved.");
-      }
-
+      const body = res.status === 204 ? null : await res.json();
+      if (!res.ok) throw new Error(body?.error || "Story could not be saved.");
       state.boardMessage = isEdit ? "Story updated." : "Story created.";
       state.boardError = false;
-      resetForm(false);
+      state.submitting = false;
+      closeModal();
       await loadStories();
-    } catch (error) {
-      state.formError = error.message;
-      renderApp();
-    } finally {
+    } catch (err) {
+      state.formError = err.message;
       state.submitting = false;
       renderApp();
     }
-
     return;
   }
 
-  if (event.target.classList.contains("comment-form")) {
+  if (event.target.classList.contains("cmt-form")) {
     event.preventDefault();
     const storyId = Number(event.target.dataset.storyId);
-    const formData = new FormData(event.target);
-    const text = String(formData.get("text") || "");
-    await addComment(storyId, text);
+    const fd = new FormData(event.target);
+    await addComment(storyId, String(fd.get("text") || ""));
   }
 }
 
@@ -482,28 +522,20 @@ async function addComment(storyId, text) {
   state.commentErrorByStoryId[storyId] = "";
   state.commentSubmittingId = storyId;
   renderApp();
-
   try {
-    const response = await fetch(`${API_BASE}/stories/${storyId}/comments`, {
+    const res = await fetch(`${API_BASE}/stories/${storyId}/comments`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
     });
-
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body?.error || "Comment could not be saved.");
-    }
-
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "Comment could not be saved.");
     state.commentDrafts[storyId] = "";
     state.commentErrorByStoryId[storyId] = "";
     state.boardMessage = `Comment added to story #${storyId}.`;
     await loadStories();
-  } catch (error) {
-    state.commentErrorByStoryId[storyId] = error.message;
+  } catch (err) {
+    state.commentErrorByStoryId[storyId] = err.message;
     renderApp();
   } finally {
     state.commentSubmittingId = null;
@@ -512,12 +544,8 @@ async function addComment(storyId, text) {
 }
 
 function startEdit(storyId) {
-  const story = state.stories.find((item) => item.id === storyId);
-
-  if (!story) {
-    return;
-  }
-
+  const story = state.stories.find((s) => s.id === storyId);
+  if (!story) return;
   state.formMode = "edit";
   state.editingId = story.id;
   state.formError = "";
@@ -528,76 +556,47 @@ function startEdit(storyId) {
     points: String(story.points),
     acceptanceCriteria: story.acceptanceCriteria.join("\n")
   };
-
-  renderApp();
-  document.querySelector('input[name="title"]')?.focus();
+  openModal();
 }
 
 async function deleteStory(storyId) {
-  const story = state.stories.find((item) => item.id === storyId);
-
-  if (!story || !window.confirm(`Delete story #${storyId}?`)) {
-    return;
-  }
-
+  const story = state.stories.find((s) => s.id === storyId);
+  if (!story || !window.confirm(`Delete story #${storyId}?`)) return;
   state.boardMessage = `Deleting story #${storyId}...`;
   state.boardError = false;
   renderApp();
-
   try {
-    const response = await fetch(`${API_BASE}/stories/${storyId}`, {
-      method: "DELETE"
-    });
-
-    if (!response.ok) {
-      const body = await response.json();
+    const res = await fetch(`${API_BASE}/stories/${storyId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json();
       throw new Error(body?.error || "Story could not be deleted.");
     }
-
-    if (state.editingId === storyId) {
-      resetForm(false);
-    }
-
     state.boardMessage = `Story #${storyId} deleted.`;
     await loadStories();
-  } catch (error) {
-    state.boardMessage = error.message;
+  } catch (err) {
+    state.boardMessage = err.message;
     state.boardError = true;
     renderApp();
   }
 }
 
 async function updateStatus(storyId, nextStatus) {
-  const story = state.stories.find((item) => item.id === storyId);
-
-  if (!story || story.status === nextStatus) {
-    return;
-  }
-
+  const story = state.stories.find((s) => s.id === storyId);
+  if (!story || story.status === nextStatus) return;
   state.statusUpdatingId = storyId;
-  state.boardMessage = `Updating status for story #${storyId}...`;
-  state.boardError = false;
   renderApp();
-
   try {
-    const response = await fetch(`${API_BASE}/stories/${storyId}/status`, {
+    const res = await fetch(`${API_BASE}/stories/${storyId}/status`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus })
     });
-
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body?.error || "Status could not be updated.");
-    }
-
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "Status could not be updated.");
     state.boardMessage = `Story #${storyId} moved to ${getStatusLabel(nextStatus)}.`;
     await loadStories();
-  } catch (error) {
-    state.boardMessage = error.message;
+  } catch (err) {
+    state.boardMessage = err.message;
     state.boardError = true;
     renderApp();
   } finally {
@@ -606,32 +605,23 @@ async function updateStatus(storyId, nextStatus) {
   }
 }
 
-async function saveReorder(storyIds) {
+async function saveReorder(storyIds, status = "todo") {
   state.reorderSaving = true;
-  state.boardMessage = "Saving backlog order...";
-  state.boardError = false;
+  state.boardMessage = "Saving order...";
   renderApp();
-
   try {
-    const response = await fetch(`${API_BASE}/stories/reorder`, {
+    const res = await fetch(`${API_BASE}/stories/reorder`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ storyIds })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storyIds, status })
     });
-
-    const body = await response.json();
-
-    if (!response.ok) {
-      throw new Error(body?.error || "Backlog order could not be saved.");
-    }
-
-    state.boardMessage = "Backlog order saved.";
+    const body = await res.json();
+    if (!res.ok) throw new Error(body?.error || "Order could not be saved.");
+    state.boardMessage = "Order saved.";
     clearDragState(false);
     await loadStories();
-  } catch (error) {
-    state.boardMessage = error.message;
+  } catch (err) {
+    state.boardMessage = err.message;
     state.boardError = true;
     clearDragState(false);
     renderApp();
@@ -647,63 +637,50 @@ function resetForm(shouldRender = true) {
   state.formError = "";
   state.submitting = false;
   state.formValues = { ...emptyForm };
-
-  if (shouldRender) {
-    renderApp();
-  }
+  if (shouldRender) renderApp();
 }
 
 function getStatusLabel(status) {
-  return columns.find((column) => column.key === status)?.title || status;
+  return columns.find((col) => col.key === status)?.title || status;
 }
 
 function moveStoryId(ids, draggedId, targetId) {
-  const nextIds = [...ids];
-  const fromIndex = nextIds.indexOf(draggedId);
-  const toIndex = nextIds.indexOf(targetId);
-
-  if (fromIndex === -1 || toIndex === -1) {
-    return ids;
-  }
-
-  nextIds.splice(fromIndex, 1);
-  nextIds.splice(toIndex, 0, draggedId);
-  return nextIds;
+  const next = [...ids];
+  const from = next.indexOf(draggedId);
+  const to = next.indexOf(targetId);
+  if (from === -1 || to === -1) return ids;
+  next.splice(from, 1);
+  next.splice(to, 0, draggedId);
+  return next;
 }
 
-function hasOrderChanged(currentIds, nextIds) {
-  return currentIds.some((id, index) => id !== nextIds[index]);
+function hasOrderChanged(curr, next) {
+  return curr.some((id, i) => id !== next[i]);
 }
 
 function clearDragState(shouldRender = true) {
   document
-    .querySelector(`[data-story-id="${state.draggingStoryId}"]`)
-    ?.classList.remove("story-card-dragging");
+    .querySelector(`.card[data-story-id="${state.draggingStoryId}"]`)
+    ?.classList.remove("card-dragging");
   clearDragTarget();
   state.draggingStoryId = null;
-
-  if (shouldRender) {
-    renderApp();
-  }
+  state.draggingStatus = null;
+  if (shouldRender) renderApp();
 }
 
 function setDragTarget(card) {
-  const currentTarget = getDragTargetCard();
-
-  if (currentTarget === card) {
-    return;
-  }
-
-  currentTarget?.classList.remove("story-card-drag-target");
-  card.classList.add("story-card-drag-target");
+  const current = getDragTargetCard();
+  if (current === card) return;
+  current?.classList.remove("card-drag-target");
+  card.classList.add("card-drag-target");
 }
 
 function clearDragTarget() {
-  getDragTargetCard()?.classList.remove("story-card-drag-target");
+  getDragTargetCard()?.classList.remove("card-drag-target");
 }
 
 function getDragTargetCard() {
-  return document.querySelector(".story-card-drag-target");
+  return document.querySelector(".card-drag-target");
 }
 
 function escapeHtml(value) {
