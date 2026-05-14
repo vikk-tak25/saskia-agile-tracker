@@ -5,7 +5,7 @@ import {
   createStory,
   findStory,
   readStories,
-  reorderTodoStories,
+  reorderStoriesByStatus,
   replaceStory,
   saveStories,
   updateStory,
@@ -117,9 +117,10 @@ app.patch("/api/stories/reorder", async (req, res, next) => {
   try {
     const stories = await readStories();
     const storyIds = req.body.storyIds || req.body.orderedIds;
-    const updatedStories = reorderTodoStories(stories, storyIds);
+    const status = req.body.status || "todo";
+    const updatedStories = reorderStoriesByStatus(stories, storyIds, status);
     await saveStories(updatedStories);
-    res.json(updatedStories.filter((story) => story.status === "todo"));
+    res.json(updatedStories.filter((story) => story.status === status));
   } catch (error) {
     next(error);
   }
