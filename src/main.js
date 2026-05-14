@@ -26,7 +26,8 @@ const state = {
   editingId: null,
   formValues: { ...emptyForm },
   formError: "",
-  submitting: false
+  submitting: false,
+  statusUpdatingId: null
 };
 
 renderApp();
@@ -135,6 +136,7 @@ function renderBoard() {
 function renderStoryCard(story) {
   const acceptanceCount = story.acceptanceCriteria.length;
   const commentsCount = story.comments.length;
+  const isStatusUpdating = state.statusUpdatingId === story.id;
 
   return `
     <article class="story-card" data-story-id="${story.id}">
@@ -158,6 +160,12 @@ function renderStoryCard(story) {
           <dd>${story.priority ?? "-"}</dd>
         </div>
       </dl>
+      <label class="status-control">
+        <span>Status</span>
+        <select data-action="status-change" data-story-id="${story.id}" ${isStatusUpdating ? "disabled" : ""}>
+          ${renderStatusOptions(story.status)}
+        </select>
+      </label>
       <div class="story-actions">
         <button class="secondary-button story-action" type="button" data-action="edit" data-story-id="${story.id}">Edit</button>
         <button class="danger-button story-action" type="button" data-action="delete" data-story-id="${story.id}">Delete</button>
@@ -186,6 +194,7 @@ function renderStatusOptions(selectedStatus) {
 function bindEvents() {
   app.addEventListener("click", handleClick);
   app.addEventListener("submit", handleSubmit);
+  app.addEventListener("change", handleChange);
 }
 
 async function loadStories() {
@@ -238,6 +247,18 @@ function handleClick(event) {
   if (button.dataset.action === "delete") {
     deleteStory(storyId);
   }
+}
+
+function handleChange(event) {
+  const element = event.target;
+
+  if (element.dataset.action !== "status-change") {
+    return;
+  }
+
+  const storyId = Number(element.dataset.storyId);
+  const nextStatus = element.value;
+  updateStatus(storyId, nextStatus);
 }
 
 async function handleSubmit(event) {
@@ -358,6 +379,45 @@ async function deleteStory(storyId) {
   }
 }
 
+async function updateStatus(storyId, nextStatus) {
+  const story = state.stories.find((item) => item.id === storyId);
+
+  if (!story || story.status === nextStatus) {
+    return;
+  }
+
+  state.statusUpdatingId = storyId;
+  state.boardMessage = `Updating status for story #${storyId}...`;
+  state.boardError = false;
+  renderApp();
+
+  try {
+    const response = await fetch(`${API_BASE}/stories/${storyId}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ status: nextStatus })
+    });
+
+    const body = await response.json();
+
+    if (!response.ok) {
+      throw new Error(body?.error || "Status could not be updated.");
+    }
+
+    state.boardMessage = `Story #${storyId} moved to ${getStatusLabel(nextStatus)}.`;
+    await loadStories();
+  } catch (error) {
+    state.boardMessage = error.message;
+    state.boardError = true;
+    renderApp();
+  } finally {
+    state.statusUpdatingId = null;
+    renderApp();
+  }
+}
+
 function resetForm(shouldRender = true) {
   state.formMode = "create";
   state.editingId = null;
@@ -368,6 +428,10 @@ function resetForm(shouldRender = true) {
   if (shouldRender) {
     renderApp();
   }
+}
+
+function getStatusLabel(status) {
+  return columns.find((column) => column.key === status)?.title || status;
 }
 
 function escapeHtml(value) {
