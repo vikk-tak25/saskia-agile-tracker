@@ -239,6 +239,14 @@ p, h2, h3, h4 { margin: 0; }
 
 .todo-dropzone { min-height: 200px; }
 
+.column-body-drag-over {
+  background: #eff6ff;
+  outline: 2px dashed #93c5fd;
+  outline-offset: -4px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
 /* ── Cards ── */
 .card {
   background: #fff;
