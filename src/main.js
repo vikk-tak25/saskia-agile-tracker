@@ -30,7 +30,10 @@ const state = {
   statusUpdatingId: null,
   commentDrafts: {},
   commentSubmittingId: null,
-  commentErrorByStoryId: {}
+  commentErrorByStoryId: {},
+  draggingStoryId: null,
+  dragOverStoryId: null,
+  reorderSaving: false
 };
 
 renderApp();
@@ -117,9 +120,10 @@ function renderBoard() {
     .map((column) => {
       const items = state.stories.filter((story) => story.status === column.key);
       const pointsTotal = items.reduce((total, story) => total + story.points, 0);
+      const isTodoColumn = column.key === "todo";
 
       return `
-        <section class="board-column board-column-${column.tone}">
+        <section class="board-column board-column-${column.tone}" data-column-key="${column.key}">
           <header class="column-header">
             <div>
               <h2>${column.title}</h2>
@@ -127,7 +131,8 @@ function renderBoard() {
             </div>
             <span class="column-total">${pointsTotal} pts</span>
           </header>
-          <div class="column-cards">
+          ${isTodoColumn ? `<p class="column-hint">Drag stories to reorder the backlog.</p>` : ""}
+          <div class="column-cards${isTodoColumn ? " todo-dropzone" : ""}" ${isTodoColumn ? 'data-dropzone="todo"' : ""}>
             ${items.length > 0 ? items.map(renderStoryCard).join("") : renderEmptyState(column.title)}
           </div>
         </section>
@@ -143,9 +148,16 @@ function renderStoryCard(story) {
   const isCommentSubmitting = state.commentSubmittingId === story.id;
   const commentDraft = state.commentDrafts[story.id] || "";
   const commentError = state.commentErrorByStoryId[story.id] || "";
+  const isDragging = state.draggingStoryId === story.id;
+  const isDragTarget = state.dragOverStoryId === story.id;
+  const isTodoStory = story.status === "todo";
 
   return `
-    <article class="story-card" data-story-id="${story.id}">
+    <article
+      class="story-card${isDragging ? " story-card-dragging" : ""}${isDragTarget ? " story-card-drag-target" : ""}"
+      data-story-id="${story.id}"
+      ${isTodoStory ? `draggable="true" data-draggable-story="todo"` : ""}
+    >
       <div class="story-card-top">
         <span class="story-id">#${story.id}</span>
         <span class="story-points">${story.points} pts</span>
@@ -231,6 +243,10 @@ function bindEvents() {
   app.addEventListener("click", handleClick);
   app.addEventListener("submit", handleSubmit);
   app.addEventListener("change", handleChange);
+  app.addEventListener("dragstart", handleDragStart);
+  app.addEventListener("dragover", handleDragOver);
+  app.addEventListener("drop", handleDrop);
+  app.addEventListener("dragend", handleDragEnd);
 }
 
 async function loadStories() {
@@ -295,6 +311,94 @@ function handleChange(event) {
   const storyId = Number(element.dataset.storyId);
   const nextStatus = element.value;
   updateStatus(storyId, nextStatus);
+}
+
+function handleDragStart(event) {
+  const card = event.target.closest("[data-draggable-story='todo']");
+
+  if (!card || state.reorderSaving) {
+    event.preventDefault();
+    return;
+  }
+
+  const storyId = Number(card.dataset.storyId);
+  state.draggingStoryId = storyId;
+  state.dragOverStoryId = storyId;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(storyId));
+  renderApp();
+}
+
+function handleDragOver(event) {
+  if (!state.draggingStoryId) {
+    return;
+  }
+
+  const card = event.target.closest("[data-draggable-story='todo']");
+  const dropzone = event.target.closest("[data-dropzone='todo']");
+
+  if (!card && !dropzone) {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (card) {
+    const nextId = Number(card.dataset.storyId);
+    if (nextId !== state.dragOverStoryId) {
+      state.dragOverStoryId = nextId;
+      renderApp();
+    }
+    return;
+  }
+
+  const todoStories = state.stories.filter((story) => story.status === "todo");
+  const fallbackId = todoStories.at(-1)?.id ?? null;
+
+  if (fallbackId && fallbackId !== state.dragOverStoryId) {
+    state.dragOverStoryId = fallbackId;
+    renderApp();
+  }
+}
+
+async function handleDrop(event) {
+  if (!state.draggingStoryId) {
+    return;
+  }
+
+  const card = event.target.closest("[data-draggable-story='todo']");
+  const dropzone = event.target.closest("[data-dropzone='todo']");
+
+  if (!card && !dropzone) {
+    return;
+  }
+
+  event.preventDefault();
+  const draggedId = state.draggingStoryId;
+  const targetId = card ? Number(card.dataset.storyId) : state.dragOverStoryId;
+
+  if (!targetId) {
+    clearDragState();
+    return;
+  }
+
+  const todoIds = state.stories
+    .filter((story) => story.status === "todo")
+    .map((story) => story.id);
+  const nextOrder = moveStoryId(todoIds, draggedId, targetId);
+
+  if (!hasOrderChanged(todoIds, nextOrder)) {
+    clearDragState();
+    return;
+  }
+
+  await saveReorder(nextOrder);
+}
+
+function handleDragEnd() {
+  if (state.draggingStoryId) {
+    clearDragState();
+  }
 }
 
 async function handleSubmit(event) {
@@ -496,6 +600,41 @@ async function updateStatus(storyId, nextStatus) {
   }
 }
 
+async function saveReorder(storyIds) {
+  state.reorderSaving = true;
+  state.boardMessage = "Saving backlog order...";
+  state.boardError = false;
+  renderApp();
+
+  try {
+    const response = await fetch(`${API_BASE}/stories/reorder`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ storyIds })
+    });
+
+    const body = await response.json();
+
+    if (!response.ok) {
+      throw new Error(body?.error || "Backlog order could not be saved.");
+    }
+
+    state.boardMessage = "Backlog order saved.";
+    clearDragState(false);
+    await loadStories();
+  } catch (error) {
+    state.boardMessage = error.message;
+    state.boardError = true;
+    clearDragState(false);
+    renderApp();
+  } finally {
+    state.reorderSaving = false;
+    renderApp();
+  }
+}
+
 function resetForm(shouldRender = true) {
   state.formMode = "create";
   state.editingId = null;
@@ -510,6 +649,33 @@ function resetForm(shouldRender = true) {
 
 function getStatusLabel(status) {
   return columns.find((column) => column.key === status)?.title || status;
+}
+
+function moveStoryId(ids, draggedId, targetId) {
+  const nextIds = [...ids];
+  const fromIndex = nextIds.indexOf(draggedId);
+  const toIndex = nextIds.indexOf(targetId);
+
+  if (fromIndex === -1 || toIndex === -1) {
+    return ids;
+  }
+
+  nextIds.splice(fromIndex, 1);
+  nextIds.splice(toIndex, 0, draggedId);
+  return nextIds;
+}
+
+function hasOrderChanged(currentIds, nextIds) {
+  return currentIds.some((id, index) => id !== nextIds[index]);
+}
+
+function clearDragState(shouldRender = true) {
+  state.draggingStoryId = null;
+  state.dragOverStoryId = null;
+
+  if (shouldRender) {
+    renderApp();
+  }
 }
 
 function escapeHtml(value) {
