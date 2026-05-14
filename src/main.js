@@ -258,7 +258,17 @@ function renderCard(story) {
                           (c) => `
                         <div class="comment">
                           <p class="comment-text">${escapeHtml(c.text)}</p>
-                          <time class="comment-time">${escapeHtml(c.createdAt)}</time>
+                          <div class="comment-footer">
+                            <time class="comment-time">${escapeHtml(c.createdAt)}</time>
+                            <button
+                              class="comment-delete-btn"
+                              type="button"
+                              data-action="delete-comment"
+                              data-story-id="${story.id}"
+                              data-comment-id="${c.id}"
+                              aria-label="Delete comment"
+                            >&#x2715;</button>
+                          </div>
                         </div>`
                         )
                         .join("")
@@ -396,6 +406,11 @@ function handleClick(event) {
 
   if (btn.dataset.action === "delete") {
     deleteStory(storyId);
+    return;
+  }
+
+  if (btn.dataset.action === "delete-comment") {
+    deleteComment(storyId, Number(btn.dataset.commentId));
   }
 }
 
@@ -559,6 +574,23 @@ async function addComment(storyId, text) {
     renderApp();
   } finally {
     state.commentSubmittingId = null;
+    renderApp();
+  }
+}
+
+async function deleteComment(storyId, commentId) {
+  try {
+    const res = await fetch(`${API_BASE}/stories/${storyId}/comments/${commentId}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) {
+      const body = await res.json();
+      throw new Error(body?.error || "Comment could not be deleted.");
+    }
+    await loadStories();
+  } catch (err) {
+    state.boardMessage = err.message;
+    state.boardError = true;
     renderApp();
   }
 }

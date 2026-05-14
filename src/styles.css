@@ -443,9 +443,37 @@ p, h2, h3, h4 { margin: 0; }
   margin-bottom: 4px;
 }
 
+.comment-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .comment-time {
   font-size: 11px;
   color: #9ca3af;
+}
+
+.comment-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #d1d5db;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.comment-delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .comment-empty {
