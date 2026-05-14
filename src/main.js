@@ -413,6 +413,7 @@ function handleDragStart(event) {
   state.draggingStatus = story?.status ?? null;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", String(storyId));
+  // Defer class so browser captures ghost before opacity changes
   setTimeout(() => {
     document.querySelector(`.card[data-story-id="${storyId}"]`)?.classList.add("card-dragging");
   }, 0);
