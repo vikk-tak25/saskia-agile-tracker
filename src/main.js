@@ -450,8 +450,13 @@ function handleDragOver(event) {
 
   if (isSameColumn) {
     clearColumnTarget();
-    if (isOtherCard) setDragTarget(card);
-    else clearDragTarget();
+    if (isOtherCard) {
+      const rect = card.getBoundingClientRect();
+      const insertAfter = event.clientY > rect.top + rect.height / 2;
+      setDragTarget(card, insertAfter);
+    } else {
+      clearDragTarget();
+    }
   } else {
     clearDragTarget();
     setColumnTarget(dropzone);
@@ -473,16 +478,23 @@ async function handleDrop(event) {
   }
 
   const status = state.draggingStatus;
+  const columnIds = state.stories.filter((s) => s.status === status).map((s) => s.id);
   const card = event.target.closest(".card");
   const targetCard =
     card && Number(card.dataset.storyId) !== draggedId ? card : getDragTargetCard();
   const targetId = targetCard ? Number(targetCard.dataset.storyId) : null;
+
+  let next;
   if (!targetId) {
-    clearDragState();
-    return;
+    // Dropped on empty column area — move to end
+    next = [...columnIds.filter((id) => id !== draggedId), draggedId];
+  } else {
+    // Insert before or after target based on cursor position
+    const rect = targetCard.getBoundingClientRect();
+    const insertAfter = event.clientY > rect.top + rect.height / 2;
+    next = moveStoryId(columnIds, draggedId, targetId, insertAfter);
   }
-  const columnIds = state.stories.filter((s) => s.status === status).map((s) => s.id);
-  const next = moveStoryId(columnIds, draggedId, targetId);
+
   if (!hasOrderChanged(columnIds, next)) {
     clearDragState();
     return;
@@ -718,14 +730,12 @@ function getStatusLabel(status) {
   return columns.find((col) => col.key === status)?.title || status;
 }
 
-function moveStoryId(ids, draggedId, targetId) {
-  const next = [...ids];
-  const from = next.indexOf(draggedId);
-  const to = next.indexOf(targetId);
-  if (from === -1 || to === -1) return ids;
-  next.splice(from, 1);
-  next.splice(to, 0, draggedId);
-  return next;
+function moveStoryId(ids, draggedId, targetId, insertAfter = false) {
+  const filtered = ids.filter((id) => id !== draggedId);
+  const to = filtered.indexOf(targetId);
+  if (to === -1) return ids;
+  filtered.splice(insertAfter ? to + 1 : to, 0, draggedId);
+  return filtered;
 }
 
 function hasOrderChanged(curr, next) {
@@ -754,19 +764,22 @@ function clearColumnTarget() {
   document.querySelector(".column-body-drag-over")?.classList.remove("column-body-drag-over");
 }
 
-function setDragTarget(card) {
+function setDragTarget(card, insertAfter = false) {
+  const wantClass = insertAfter ? "card-drag-after" : "card-drag-before";
+  const otherClass = insertAfter ? "card-drag-before" : "card-drag-after";
   const current = getDragTargetCard();
-  if (current === card) return;
-  current?.classList.remove("card-drag-target");
-  card.classList.add("card-drag-target");
+  if (current === card && card.classList.contains(wantClass)) return;
+  current?.classList.remove("card-drag-before", "card-drag-after");
+  card.classList.remove(otherClass);
+  card.classList.add(wantClass);
 }
 
 function clearDragTarget() {
-  getDragTargetCard()?.classList.remove("card-drag-target");
+  getDragTargetCard()?.classList.remove("card-drag-before", "card-drag-after");
 }
 
 function getDragTargetCard() {
-  return document.querySelector(".card-drag-target");
+  return document.querySelector(".card-drag-before, .card-drag-after");
 }
 
 function escapeHtml(value) {
