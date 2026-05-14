@@ -140,7 +140,9 @@ export function deleteComment(stories, storyId, commentId) {
   const comment = existing.comments.find((c) => c.id === Number(commentId));
 
   if (!comment) {
-    throw validationError("Comment not found.");
+    const error = new Error("Comment not found.");
+    error.status = 404;
+    throw error;
   }
 
   return {
