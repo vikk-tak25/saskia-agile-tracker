@@ -450,8 +450,13 @@ function handleDragOver(event) {
 
   if (isSameColumn) {
     clearColumnTarget();
-    if (isOtherCard) setDragTarget(card);
-    else clearDragTarget();
+    if (isOtherCard) {
+      const rect = card.getBoundingClientRect();
+      const insertAfter = event.clientY > rect.top + rect.height / 2;
+      setDragTarget(card, insertAfter);
+    } else {
+      clearDragTarget();
+    }
   } else {
     clearDragTarget();
     setColumnTarget(dropzone);
@@ -759,19 +764,22 @@ function clearColumnTarget() {
   document.querySelector(".column-body-drag-over")?.classList.remove("column-body-drag-over");
 }
 
-function setDragTarget(card) {
+function setDragTarget(card, insertAfter = false) {
+  const wantClass = insertAfter ? "card-drag-after" : "card-drag-before";
+  const otherClass = insertAfter ? "card-drag-before" : "card-drag-after";
   const current = getDragTargetCard();
-  if (current === card) return;
-  current?.classList.remove("card-drag-target");
-  card.classList.add("card-drag-target");
+  if (current === card && card.classList.contains(wantClass)) return;
+  current?.classList.remove("card-drag-before", "card-drag-after");
+  card.classList.remove(otherClass);
+  card.classList.add(wantClass);
 }
 
 function clearDragTarget() {
-  getDragTargetCard()?.classList.remove("card-drag-target");
+  getDragTargetCard()?.classList.remove("card-drag-before", "card-drag-after");
 }
 
 function getDragTargetCard() {
-  return document.querySelector(".card-drag-target");
+  return document.querySelector(".card-drag-before, .card-drag-after");
 }
 
 function escapeHtml(value) {

@@ -269,9 +269,12 @@ p, h2, h3, h4 { margin: 0; }
   border-color: #e2e8f0;
 }
 
-.card-drag-target {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+.card-drag-before {
+  box-shadow: 0 -3px 0 #2563eb, 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.card-drag-after {
+  box-shadow: 0 3px 0 #2563eb, 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .card-top {
