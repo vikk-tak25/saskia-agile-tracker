@@ -217,10 +217,10 @@ function renderCard(story) {
           data-story-id="${story.id}"
           aria-label="Drag to reorder"
           title="Drag to reorder"
-        ><svg viewBox="0 0 10 16" width="7" height="12" fill="currentColor" aria-hidden="true">
-          <circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>
-          <circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/>
-          <circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+        ><svg viewBox="0 0 8 14" width="8" height="14" fill="currentColor" aria-hidden="true">
+          <circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/>
+          <circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/>
+          <circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/>
         </svg></button>
         <div class="card-top-right">
           <span class="card-pts">${story.points}p</span>
@@ -413,6 +413,7 @@ function handleDragStart(event) {
   state.draggingStatus = story?.status ?? null;
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", String(storyId));
+  // Defer class so browser captures ghost before opacity changes
   setTimeout(() => {
     document.querySelector(`.card[data-story-id="${storyId}"]`)?.classList.add("card-dragging");
   }, 0);

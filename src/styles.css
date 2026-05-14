@@ -247,6 +247,7 @@ p, h2, h3, h4 { margin: 0; }
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s, transform 0.2s;
+  will-change: transform, opacity;
 }
 
 .card:hover {
@@ -283,7 +284,7 @@ p, h2, h3, h4 { margin: 0; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 5px;
+  padding: 3px 6px;
   border: none;
   border-radius: 4px;
   background: #f3f4f6;
@@ -291,6 +292,7 @@ p, h2, h3, h4 { margin: 0; }
   cursor: grab;
   transition: background 0.12s, color 0.12s;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .drag-handle:hover {
