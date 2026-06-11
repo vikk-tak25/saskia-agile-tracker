@@ -1,5 +1,13 @@
 # AI Quality Plan
 
+## CI status
+
+![CI passing](docs/ci-success.png)
+
+First run: commit `340a71e`, triggered via push to `main` — **Success** in 21 s (`npm test` 11/11 pass + `npm run build` OK).
+
+---
+
 ## 1. Which AI rules file was chosen and why?
 
 `CLAUDE.md` — the project is developed using Claude Code (Anthropic's CLI), so `CLAUDE.md` is the natively supported rules file that Claude Code loads automatically at the start of every session. It is scoped to this project directory and does not require any extra configuration. `AGENTS.md` would work for other agents; `.github/copilot-instructions.md` is GitHub Copilot-specific. `CLAUDE.md` is the right choice here.
