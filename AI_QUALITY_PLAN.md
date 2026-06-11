@@ -6,6 +6,12 @@
 
 First run: commit `340a71e`, triggered via push to `main` — **Success** in 21 s (`npm test` 11/11 pass + `npm run build` OK).
 
+## Branch protection
+
+![Branch protection active](docs/branch-protection.png)
+
+`main` branch is protected: direct push blocked, PR + 1 approval required, `test-and-build` CI must pass before merge.
+
 ---
 
 ## 1. Which AI rules file was chosen and why?
