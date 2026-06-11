@@ -91,4 +91,4 @@ Without these technical controls, the `CLAUDE.md` rules are advisory only — th
 
 **Risk that remains:** No automated lint or type check exists. A style inconsistency or a subtle JavaScript runtime error (e.g. calling a method on `undefined`) will not be caught unless it is exercised by an existing test. Adding ESLint with a minimal `eslint:recommended` config would close this gap without requiring TypeScript.
 
-**What to improve next:** Enable GitHub branch protection on `main` (block direct push, require 1 review, require CI green). Add `.github/pull_request_template.md` so every PR prompts the contributor to confirm tests passed and list changed files — the template is already referenced in section 7 as a required technical control.
+**What to improve next:** `.github/pull_request_template.md` is now included — every PR will prompt the contributor to confirm tests passed and list changed files. The remaining gap is branch protection on `main`: enable it in Settings → Branches (block direct push, require 1 review, require CI green) to turn the advisory rules in `CLAUDE.md` into enforced gates.
