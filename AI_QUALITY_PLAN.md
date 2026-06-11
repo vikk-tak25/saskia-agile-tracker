@@ -16,11 +16,11 @@ First run: commit `340a71e`, triggered via push to `main` — **Success** in 21 
 
 ## 2. Sources used
 
-1. **Claude Code documentation** — `CLAUDE.md` format, what Claude reads automatically, memory vs. rules file distinction.
-2. **Project `package.json` and `README.md`** — exact script names (`npm run dev`, `npm test`, `npm run build`), actual stack (Vite, Express 5, Node built-in test runner).
-3. **`server/storyStore.js`** — validation rules (required fields, status enum, points constraints) that must not be silently changed.
-4. **`tests/api.test.js`** — understanding the test structure (`before`/`after` data restore, sequential execution) so that rules about not breaking tests are concrete.
-5. **OWASP Top 10** — informed the security rules section (input validation, no credential logging, CORS).
+1. **Claude Code documentation — Memory and CLAUDE.md** ([docs.anthropic.com/en/docs/claude-code/memory](https://docs.anthropic.com/en/docs/claude-code/memory)) — explains the `CLAUDE.md` format, which files Claude reads automatically, and how project-level rules differ from user-level memory.
+2. **Project `package.json` and `README.md`** — exact script names (`npm run dev`, `npm test`, `npm run build`), actual stack (Vite, Express 5, Node built-in test runner). Read directly from the repository.
+3. **`server/storyStore.js` and `tests/api.test.js`** — validation rules (required fields, status enum, points constraints) and test structure (`before`/`after` data restore, sequential `concurrency: false`). Read directly to make rules concrete rather than generic.
+4. **OWASP Top 10** ([owasp.org/www-project-top-ten](https://owasp.org/www-project-top-ten/)) — informed the security rules section: A03 Injection → server-side input validation; A09 Security Logging → no logging of request bodies; A05 Security Misconfiguration → do not disable CORS or auth middleware.
+5. **GitHub Actions documentation** ([docs.github.com/en/actions](https://docs.github.com/en/actions)) — workflow syntax (`on: push/pull_request`, `jobs`, `steps`) for `.github/workflows/ci.yml`. **GitHub branch protection documentation** ([docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)) — required status checks, pull request reviews, block direct push to `main`.
 
 ---
 
@@ -87,6 +87,8 @@ Without these technical controls, the `CLAUDE.md` rules are advisory only — th
 
 **Most useful rule:** The completion checklist (`npm test` + `npm run build` must both pass). It makes "done" a verifiable state rather than a judgment call, and it catches two categories of failure — logic errors (tests) and build-time errors (build) — that different tools catch differently.
 
-**Risk that remains:** There is no automated lint or type check. A style inconsistency or a subtle JavaScript runtime error (e.g. calling a method on `undefined`) will not be caught by the current tooling unless it happens to be exercised by an existing test. Adding ESLint with a minimal config would close this gap.
+**Known contradiction — setup commits went directly to `main`:** The `CLAUDE.md` rule "never commit directly to `main`" was broken by the very commits that added these files. This happened because branch protection was not yet enabled at that point. This reduces the credibility of the Git workflow rule: a rule that was bypassed on day one needs a technical gate to have any real effect. The fix is to enable branch protection on `main` immediately (Settings → Branches → Add rule: require PR, require CI to pass, block direct push).
 
-**What I would improve in the next version:** Add a GitHub Actions workflow file (`.github/workflows/ci.yml`) that runs `npm test` and `npm run build` automatically on every pull request, and enable branch protection on `main` to block merges without a green CI run. That would turn the advisory rules in `CLAUDE.md` into enforced gates.
+**Risk that remains:** No automated lint or type check exists. A style inconsistency or a subtle JavaScript runtime error (e.g. calling a method on `undefined`) will not be caught unless it is exercised by an existing test. Adding ESLint with a minimal `eslint:recommended` config would close this gap without requiring TypeScript.
+
+**What to improve next:** Enable GitHub branch protection on `main` (block direct push, require 1 review, require CI green). Add `.github/pull_request_template.md` so every PR prompts the contributor to confirm tests passed and list changed files — the template is already referenced in section 7 as a required technical control.

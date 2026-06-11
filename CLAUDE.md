@@ -111,6 +111,20 @@ Before saying a task is complete, verify all of the following:
 
 ---
 
+## Before making any change
+
+Before editing any file, complete this analysis in order:
+
+1. Run `git status` — confirm you are on a feature branch, not `main`. If on `main`, stop and create a branch first.
+2. Read every file you intend to change — do not edit from memory.
+3. Read the existing tests in `tests/api.test.js` for the area you are changing — understand what is already covered.
+4. Search for existing helper functions in `server/storyStore.js` before writing new logic — avoid duplicating `findStory`, `validationError`, `validateStoryPayload`, etc.
+5. State the impact: which files will change, which tests cover the changed code, and whether any existing tests need updating.
+
+Only start editing after completing all five steps.
+
+---
+
 ## When unsure
 
 - Ask before changing: the data schema in `stories.json`, route paths, validation rules in `storyStore.js`, or the `before`/`after` hooks in `tests/api.test.js`.
